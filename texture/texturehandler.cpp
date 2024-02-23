@@ -1,6 +1,8 @@
 #include "texturehandler.h"
 #include "window/windowhandler.h"
 
+#include "SDL3/SDL_opengl.h"
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
@@ -82,6 +84,16 @@ Texture Textures::_loadTexture(const char *fileName) {
 
     if (error)
         SDL_Log("Blendmode failed: %s", SDL_GetError());
+
+
+        // Get OpenGL texture ID from SDL texture
+    GLuint textureID;
+    SDL_GL_BindTexture(tex, nullptr, nullptr); // Bind SDL texture to the current OpenGL context
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, reinterpret_cast<GLint*>(&textureID)); // Get the bound OpenGL texture ID
+    SDL_GL_UnbindTexture(tex); // Unbind SDL texture from OpenGL context
+
+    // Assign OpenGL texture ID to texture object
+    texture.textureID = textureID;
 
     SDL_Log("Loaded texture: %s\n"
             "\tX: %i - Y: %i", fileName, texture.width, texture.height);

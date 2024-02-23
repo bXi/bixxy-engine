@@ -6,6 +6,13 @@ option(ADD_IMGUI "Include ImGui" OFF)
 
 # Add the content from the provided "engine.cmake" file
 add_library("bixxy-engine" STATIC
+    assettypes/font.h
+    assettypes/music.h
+    assettypes/shader.h
+    assettypes/sound.h
+    assettypes/texture.h
+
+
     audio/audiohandler.cpp
     audio/audiohandler.h
     configuration/configuration.h
@@ -25,6 +32,9 @@ add_library("bixxy-engine" STATIC
     settings/mini.h
     settings/settingshandler.cpp
     settings/settingshandler.h
+
+    shader/shaderhandler.h
+    shader/shaderhandler.cpp
 
     state/basestate.h
     state/state.h
@@ -138,12 +148,25 @@ if(SDL3_mixer_ADDED)
     target_include_directories("bixxy-engine" PUBLIC ${SDL3_mixer_SOURCE_DIR}/include)
 endif()
 
+if (NOT EMSCRIPTEN)
+    message("Adding OPENGL")
+
+    add_subdirectory(glad)
+
+    find_package(OpenGL REQUIRED)
+    target_include_directories("bixxy-engine" PUBLIC ${OPENGL_INCLUDE_DIR})
+    target_link_libraries("bixxy-engine" PUBLIC OpenGL::GL glad)
+endif()
+
 target_link_libraries("bixxy-engine" PUBLIC
     SDL3::SDL3-static
     SDL3_image::SDL3_image
     SDL3_ttf::SDL3_ttf
     SDL3_mixer::SDL3_mixer
 )
+
+
+
 
 if (ADD_IMGUI)
     CPMAddPackage(
@@ -167,12 +190,14 @@ if (ADD_IMGUI)
                 window/imgui_impl_win32.cpp
                 window/imgui_impl_sdlrenderer3.cpp
                 window/imgui_impl_sdl3.cpp
+                window/imgui_impl_opengl3.cpp
             )
         else()
             target_sources("bixxy-engine" PRIVATE
                 window/imgui_impl_sdlrenderer3.cpp
                 window/imgui_impl_sdl3.cpp
-            ) 
+                window/imgui_impl_opengl3.cpp
+            )
         endif()
     endif()
 endif()

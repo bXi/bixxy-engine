@@ -2,6 +2,8 @@
 
 #include "SDL3/SDL.h"
 
+#include "glad/gl.h"
+
 struct Texture
 {
     int width;
@@ -11,4 +13,6 @@ struct Texture
 
     SDL_Surface* surface = nullptr;
     SDL_Texture* texture = nullptr;
+
+    GLuint textureID = 0;
 };

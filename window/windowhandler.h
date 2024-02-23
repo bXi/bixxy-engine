@@ -6,6 +6,7 @@
 
 #include "SDL3/SDL.h"
 #include "SDL3_image/SDL_image.h"
+#include "glad/gl.h"
 
 #include "utils/vectors.h"
 #include "utils/lerp.h"
@@ -20,6 +21,7 @@
     #include "imgui.h"
     #include "imgui_impl_sdlrenderer3.h"
     #include "imgui_impl_sdl3.h"
+    #include "imgui_impl_opengl3.h"
 
     #ifdef WIN32
     #include "imgui_impl_win32.h"
@@ -45,6 +47,7 @@ public:
 
     static SDL_Window* GetWindow() { return get()._getWindow(); }
     static SDL_Renderer *GetRenderer() { return get()._getRenderer(); };
+    static SDL_GLContext GetGLContext() { return get()._getGLContext(); };
 
     static void SetScale(int scalefactor) { get()._setScale(scalefactor); }
 
@@ -56,8 +59,11 @@ public:
 
     static void StartFrame() { get()._startFrame(); }
     static void EndFrame() { get()._endFrame(); }
-
+    static Texture GetBackBuffer() { return get()._backBuffer; }
     static void ClearBackground(Color color) { get()._clearBackground(color); }
+
+    static void SetRenderTarget(Texture target) { get()._setRenderTarget(target); }
+    static void ResetRenderTarget() { get()._resetRenderTarget(); }
 
     static void ToggleFullscreen() { get()._toggleFullscreen(); }
     static bool IsFullscreen() { return get()._isFullscreen(); }
@@ -72,13 +78,14 @@ public:
 
 private:
     std::unique_ptr<SDL_Window, SDL_Window_deleter> m_window;
-
+    SDL_GLContext glContext;
     double _getRunTime();
     void _initWindow(const std::string &title, int width, int height, int scale = 0, unsigned int flags = 0);
     void _close();
     void _toggleFullscreen();
     bool _isFullscreen();
     SDL_Renderer *_getRenderer();
+    SDL_GLContext _getGLContext();
     vf2d _getSize(bool getRealSize = false);
     void _handleInput();
     int _getFPS(float milliseconds);
@@ -89,10 +96,14 @@ private:
     void _setScaledSize(int width, int height, int scale = 0);
     void _startFrame();
     void _clearBackground(Color color);
+
+    void _setRenderTarget(Texture target);
+    void _resetRenderTarget();
     void _endFrame();
     void _toggleDebugMenu();
 
     Texture _screenBuffer;
+    Texture _backBuffer;
 
     int _scaleFactor = 1;
 
@@ -105,6 +116,10 @@ private:
     std::chrono::high_resolution_clock::time_point _startTime;
     std::chrono::high_resolution_clock::time_point _currentTime;
     std::chrono::high_resolution_clock::time_point _previousTime;
+
+    GLuint vao;
+    GLuint vbo;
+
 #ifdef ADD_IMGUI
     void SetupImGuiStyle();
 

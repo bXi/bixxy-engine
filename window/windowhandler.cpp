@@ -6,6 +6,7 @@
 #include "texture/texturehandler.h"
 #include "render2d/render2dhandler.h"
 
+
 void Window::_initWindow(const std::string &title, int width, int height, int scale, unsigned int flags) {
 
     if (scale > 1) { //when scaling asume width is virtual pixels instead of real screen pixels
@@ -14,12 +15,24 @@ void Window::_initWindow(const std::string &title, int width, int height, int sc
     }
 
     SDL_InitSubSystem(SDL_InitFlags::SDL_INIT_VIDEO);
-    auto window = SDL_CreateWindow(title.c_str(), width, height, flags);
+
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+    auto window = SDL_CreateWindow(title.c_str(), width, height, flags | SDL_WINDOW_OPENGL);
     if (window) {
         m_window.reset(window);
+        glContext = SDL_GL_CreateContext( window );
     } else {
         throw std::runtime_error(SDL_GetError());
     }
+    _backBuffer = Textures::CreateEmptyTexture(Window::GetSize(true));
+    SDL_GL_MakeCurrent(window, glContext);
+
+    gladLoadGL((GLADloadfunc) SDL_GL_GetProcAddress);
+    glad_glViewport(0,0,width, height);
 
 #ifdef __EMSCRIPTEN__
     auto renderer = SDL_CreateRenderer(window, nullptr, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -44,9 +57,8 @@ void Window::_initWindow(const std::string &title, int width, int height, int sc
 
 #ifdef ADD_IMGUI
     ImGui::CreateContext();
-
-    ImGui_ImplSDL3_InitForSDLRenderer(window, GetRenderer());
-    ImGui_ImplSDLRenderer3_Init(GetRenderer());
+    ImGui_ImplSDL3_InitForOpenGL(window, glContext);
+    ImGui_ImplOpenGL3_Init("#version 130");
     SetupImGuiStyle();
 #endif
 
@@ -70,11 +82,17 @@ void Window::_toggleFullscreen() {
     bool isFullscreen = SDL_GetWindowFlags(window) & fullscreenFlag;
 
     SDL_SetWindowFullscreen(window, !isFullscreen);
+
+    _backBuffer = Textures::CreateEmptyTexture(GetSize(true));
 }
 
 SDL_Renderer *Window::_getRenderer() {
     auto *window = m_window.get();
     return SDL_GetRenderer(window);
+}
+
+SDL_GLContext Window::_getGLContext() {
+    return glContext;
 }
 
 int Window::_getFPS(float milliseconds) {
@@ -169,10 +187,13 @@ void Window::_startFrame() {
 
     if (_scaleFactor > 1) {
         SDL_SetRenderTarget(GetRenderer(), _screenBuffer.texture);
+    } else {
+        SDL_SetRenderTarget(GetRenderer(), _backBuffer.texture);
+
     }
 
 #ifdef ADD_IMGUI
-    ImGui_ImplSDLRenderer3_NewFrame();
+    ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 #endif
@@ -181,19 +202,50 @@ void Window::_startFrame() {
 void Window::_endFrame() {
 
     if (_scaleFactor > 1) {
-        SDL_SetRenderTarget(GetRenderer(), nullptr);
+        SDL_SetRenderTarget(GetRenderer(), get()._backBuffer.texture);
         Render2D::DrawTexture(_screenBuffer, {0.f, 0.f}, {static_cast<float>(GetSize(true).x), static_cast<float>(GetSize(true).y)}, WHITE);
     }
+
+	SDL_SetRenderTarget(GetRenderer(), nullptr);
+	SDL_RenderClear(GetRenderer());
+
+    auto bb = get()._backBuffer;
+	SDL_GL_BindTexture(bb.texture, nullptr, nullptr);
+
+    GLfloat minx, miny, maxx, maxy;
+	GLfloat minu, maxu, minv, maxv;
+
+	minx = 0.0f;
+	miny = 0.0f;
+	maxx = static_cast<float>(GetSize().x);
+	maxy = static_cast<float>(GetSize().y);
+
+	minu = 0.0f;
+	maxu = 1.0f;
+	minv = 1.0f;
+	maxv = 0.0f;
+
+	glBegin(GL_TRIANGLE_STRIP);
+		glTexCoord2f(minu, minv);
+		glVertex2f(minx, miny);
+		glTexCoord2f(maxu, minv);
+		glVertex2f(maxx, miny);
+		glTexCoord2f(minu, maxv);
+		glVertex2f(minx, maxy);
+		glTexCoord2f(maxu, maxv);
+		glVertex2f(maxx, maxy);
+	glEnd();
+
 
 #ifdef ADD_IMGUI
     if (_debugMenuVisible) {
         Helpers::DrawMainMenu();
     }
     ImGui::Render();
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData());
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif
 
-    SDL_RenderPresent(Window::GetRenderer());
+	SDL_GL_SwapWindow(m_window.get());
 
     _frameCount++;
     _previousTime = _currentTime;
@@ -218,7 +270,7 @@ void Window::_setScale(int scalefactor) {
     if (scalefactor > 1) {
         _screenBuffer = Textures::CreateEmptyTexture(Window::GetSize());
     } else {
-        SDL_SetRenderTarget(GetRenderer(), nullptr);
+        SDL_SetRenderTarget(GetRenderer(), _backBuffer.texture);
     }
 }
 
@@ -324,3 +376,19 @@ void Window::SetupImGuiStyle()
 	style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.2000000029802322f, 0.2000000029802322f, 0.2000000029802322f, 0.3499999940395355f);
 }
 #endif
+
+void Window::_setRenderTarget(Texture target) {
+    SDL_SetRenderTarget(Window::GetRenderer(), target.texture);
+}
+
+
+
+void Window::_resetRenderTarget() {
+    if (_scaleFactor > 1) {
+        _setRenderTarget(_screenBuffer);
+    } else {
+        _setRenderTarget(_backBuffer);
+    }
+}
+
+
